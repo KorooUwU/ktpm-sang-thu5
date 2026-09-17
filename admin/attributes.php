@@ -93,9 +93,18 @@ if (isset($_GET['delete_color'])) {
     }
 }
 
-// Fetch lists with usage count
-$sizes_list = $conn->query("SELECT s.*, (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.size_id=s.id) as prod_count FROM sizes s ORDER BY s.size ASC");
-$colors_list = $conn->query("SELECT c.*, (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.color_id=c.id) as prod_count FROM colors c ORDER BY c.name ASC");
+// Fetch lists with usage count across product varieties, orders, and imports
+$sizes_list = $conn->query("SELECT s.*, 
+    (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.size_id=s.id) as prod_count,
+    (SELECT COUNT(*) FROM order_details od WHERE od.size_id=s.id) as order_count,
+    (SELECT COUNT(*) FROM import_details id_tab WHERE id_tab.size_id=s.id) as import_count
+FROM sizes s ORDER BY s.size ASC");
+
+$colors_list = $conn->query("SELECT c.*, 
+    (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.color_id=c.id) as prod_count,
+    (SELECT COUNT(*) FROM order_details od WHERE od.color_id=c.id) as order_count,
+    (SELECT COUNT(*) FROM import_details id_tab WHERE id_tab.color_id=c.id) as import_count
+FROM colors c ORDER BY c.name ASC");
 
 ?>
 
@@ -125,7 +134,7 @@ $colors_list = $conn->query("SELECT c.*, (SELECT COUNT(DISTINCT product_id) FROM
                             <tr>
                                 <th class="text-center" style="width:70px">ID</th>
                                 <th>Kích thước (Size)</th>
-                                <th class="text-center">Số sản phẩm dùng</th>
+                                <th class="text-center">Tình trạng sử dụng</th>
                                 <th class="text-center" style="width:100px">Thao tác</th>
                             </tr>
                         </thead>
@@ -135,7 +144,13 @@ $colors_list = $conn->query("SELECT c.*, (SELECT COUNT(DISTINCT product_id) FROM
                                     <td class="text-center text-muted small"><?= $s['id'] ?></td>
                                     <td class="fw-bold fs-6">Size <?= $s['size'] ?></td>
                                     <td class="text-center">
-                                        <span class="badge bg-<?= $s['prod_count'] > 0 ? 'info' : 'secondary' ?>"><?= $s['prod_count'] ?> SP</span>
+                                        <span class="badge bg-<?= $s['prod_count'] > 0 ? 'info' : 'secondary' ?>" title="Số sản phẩm đang sử dụng biến thể size này"><?= $s['prod_count'] ?> SP</span>
+                                        <?php if ($s['order_count'] > 0): ?>
+                                            <span class="badge bg-warning text-dark ms-1" title="Size đã xuất hiện trong <?= $s['order_count'] ?> chi tiết đơn hàng"><i class="bi bi-receipt me-1"></i><?= $s['order_count'] ?> đơn</span>
+                                        <?php endif; ?>
+                                        <?php if ($s['import_count'] > 0): ?>
+                                            <span class="badge bg-secondary ms-1" title="Size đã xuất hiện trong <?= $s['import_count'] ?> phiếu nhập"><i class="bi bi-box-arrow-in-right me-1"></i><?= $s['import_count'] ?> nhập</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="text-center">
                                         <a href="attributes.php?delete_size=<?= $s['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Xóa Size này?')" title="Xóa Size"><i class="bi bi-trash"></i></a>
@@ -172,7 +187,7 @@ $colors_list = $conn->query("SELECT c.*, (SELECT COUNT(DISTINCT product_id) FROM
                             <tr>
                                 <th class="text-center" style="width:70px">ID</th>
                                 <th>Tên màu sắc</th>
-                                <th class="text-center">Số sản phẩm dùng</th>
+                                <th class="text-center">Tình trạng sử dụng</th>
                                 <th class="text-center" style="width:100px">Thao tác</th>
                             </tr>
                         </thead>
@@ -182,7 +197,13 @@ $colors_list = $conn->query("SELECT c.*, (SELECT COUNT(DISTINCT product_id) FROM
                                     <td class="text-center text-muted small"><?= $c['id'] ?></td>
                                     <td class="fw-semibold"><i class="bi bi-circle-fill me-2 text-secondary" style="font-size:.8rem"></i><?= htmlspecialchars($c['name']) ?></td>
                                     <td class="text-center">
-                                        <span class="badge bg-<?= $c['prod_count'] > 0 ? 'info' : 'secondary' ?>"><?= $c['prod_count'] ?> SP</span>
+                                        <span class="badge bg-<?= $c['prod_count'] > 0 ? 'info' : 'secondary' ?>" title="Số sản phẩm đang sử dụng biến thể màu này"><?= $c['prod_count'] ?> SP</span>
+                                        <?php if ($c['order_count'] > 0): ?>
+                                            <span class="badge bg-warning text-dark ms-1" title="Màu sắc đã xuất hiện trong <?= $c['order_count'] ?> chi tiết đơn hàng"><i class="bi bi-receipt me-1"></i><?= $c['order_count'] ?> đơn</span>
+                                        <?php endif; ?>
+                                        <?php if ($c['import_count'] > 0): ?>
+                                            <span class="badge bg-secondary ms-1" title="Màu sắc đã xuất hiện trong <?= $c['import_count'] ?> phiếu nhập"><i class="bi bi-box-arrow-in-right me-1"></i><?= $c['import_count'] ?> nhập</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="text-center">
                                         <a href="attributes.php?delete_color=<?= $c['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Xóa màu sắc này?')" title="Xóa Màu"><i class="bi bi-trash"></i></a>
