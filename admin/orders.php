@@ -102,9 +102,14 @@ if ($detail_id) {
         <a href="orders.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Quay lại</a>
     </div>
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white fw-bold border-0 d-flex justify-content-between">
+        <div class="card-header bg-white fw-bold border-0 d-flex justify-content-between align-items-center">
             <span>Đơn hàng: <?= htmlspecialchars($orderDetail['order_code']) ?></span>
-            <span class="badge bg-<?= $statusColors[$orderDetail['status']] ?? 'dark' ?>"><?= $statusLabels[$orderDetail['status']] ?? 'Không xác định' ?></span>
+            <div>
+                <button type="button" onclick="printInvoice()" class="btn btn-outline-primary btn-sm me-2">
+                    <i class="bi bi-printer me-1"></i>In hóa đơn
+                </button>
+                <span class="badge bg-<?= $statusColors[$orderDetail['status']] ?? 'dark' ?>"><?= $statusLabels[$orderDetail['status']] ?? 'Không xác định' ?></span>
+            </div>
         </div>
         <div class="card-body">
             <div class="row g-4 mb-4">
@@ -324,6 +329,138 @@ if ($detail_id) {
             </div>
         <?php endif; ?>
     </div>
+<?php endif; ?>
+
+<?php if ($orderDetail): ?>
+<script>
+function printInvoice() {
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
+    const invoiceContent = `
+        <!DOCTYPE html>
+        <html lang="vi">
+        <head>
+            <meta charset="UTF-8">
+            <title>Hóa Đơn - <?= htmlspecialchars($orderDetail['order_code']) ?></title>
+            <style>
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; line-height: 1.5; }
+                .header { text-align: center; margin-bottom: 20px; border-bottom: 2px double #e74c3c; padding-bottom: 10px; }
+                .header h2 { margin: 0; color: #e74c3c; text-transform: uppercase; font-size: 24px; }
+                .header p { margin: 2px 0; color: #666; font-size: 13px; }
+                .title { text-align: center; margin: 15px 0; font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+                .info-table { width: 100%; margin-bottom: 20px; font-size: 13px; }
+                .info-table td { padding: 4px 0; vertical-align: top; }
+                .info-table strong { color: #555; }
+                .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+                .items-table th, .items-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                .items-table th { background-color: #f8f9fa; font-weight: bold; }
+                .text-end { text-align: right; }
+                .text-center { text-align: center; }
+                .total-row { font-weight: bold; font-size: 14px; }
+                .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #777; }
+                .signatures { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; font-size: 13px; }
+                .signature-box { width: 45%; }
+                @media print {
+                    body { padding: 0; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>SneakerShop</h2>
+                <p>Địa chỉ: 1 Lê Lợi, Bến Nghé, Quận 1, TP. Hồ Chí Minh</p>
+                <p>Hotline: 0901 000 001 | Email: support@sneakershop.vn</p>
+            </div>
+            
+            <div class="title">HÓA ĐƠN BÁN HÀNG</div>
+            
+            <table class="info-table">
+                <tr>
+                    <td width="60%"><strong>Mã đơn hàng:</strong> <?= htmlspecialchars($orderDetail['order_code']) ?></td>
+                    <td width="40%"><strong>Ngày đặt:</strong> <?= date('d/m/Y H:i', strtotime($orderDetail['created_at'])) ?></td>
+                </tr>
+                <tr>
+                    <td><strong>Khách hàng:</strong> <?= htmlspecialchars($orderDetail['full_name']) ?></td>
+                    <td><strong>SĐT nhận hàng:</strong> <?= htmlspecialchars($orderDetail['receiver_phone']) ?></td>
+                </tr>
+                <tr>
+                    <td colspan="2"><strong>Địa chỉ giao:</strong> <?= htmlspecialchars($orderDetail['shipping_address'] . ', ' . $orderDetail['ward'] . ', ' . $orderDetail['district'] . ', ' . $orderDetail['city']) ?></td>
+                </tr>
+                <tr>
+                    <td><strong>Phương thức thanh toán:</strong> <?= $orderDetail['payment_method'] === 'cash' ? 'Thanh toán khi nhận hàng (COD)' : 'Thanh toán trực tuyến' ?></td>
+                    <td><strong>Trạng thái đơn:</strong> <?= htmlspecialchars($statusLabels[$orderDetail['status']] ?? '') ?></td>
+                </tr>
+            </table>
+
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th width="5%" class="text-center">STT</th>
+                        <th>Tên sản phẩm</th>
+                        <th width="10%" class="text-center">Size</th>
+                        <th width="15%">Màu sắc</th>
+                        <th width="10%" class="text-center">SL</th>
+                        <th width="18%" class="text-end">Đơn giá</th>
+                        <th width="18%" class="text-end">Thành tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    $details = $conn->query("SELECT od.*, p.name as product_name, p.code, c.name as color_name, s.size FROM order_details od JOIN products p ON od.product_id=p.id JOIN colors c ON od.color_id=c.id JOIN sizes s ON od.size_id=s.id WHERE od.order_id={$orderDetail['id']}");
+                    $stt = 1;
+                    while ($d = $details->fetch_assoc()):
+                    ?>
+                    <tr>
+                        <td class="text-center"><?= $stt++ ?></td>
+                        <td>[<?= htmlspecialchars($d['code']) ?>] <?= htmlspecialchars($d['product_name']) ?></td>
+                        <td class="text-center"><?= $d['size'] ?></td>
+                        <td><?= htmlspecialchars($d['color_name']) ?></td>
+                        <td class="text-center"><?= $d['quantity'] ?></td>
+                        <td class="text-end"><?= formatPrice($d['unit_price']) ?></td>
+                        <td class="text-end"><?= formatPrice($d['unit_price'] * $d['quantity']) ?></td>
+                    </tr>
+                    <?php endwhile; ?>
+                    <tr>
+                        <td colspan="6" class="text-end">Tạm tính:</td>
+                        <td class="text-end"><?= formatPrice($orderDetail['total_amount'] + $orderDetail['discount_amount']) ?></td>
+                    </tr>
+                    <?php if ($orderDetail['discount_amount'] > 0): ?>
+                    <tr>
+                        <td colspan="6" class="text-end">Giảm giá:</td>
+                        <td class="text-end">-<?= formatPrice($orderDetail['discount_amount']) ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <tr class="total-row">
+                        <td colspan="6" class="text-end">TỔNG CỘNG THANH TOÁN:</td>
+                        <td class="text-end" style="color:#e74c3c"><?= formatPrice($orderDetail['total_amount']) ?></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="signatures">
+                <div class="signature-box">
+                    <p><strong>Khách hàng nhận hàng</strong></p>
+                    <p style="font-size:11px;color:#888">(Ký và ghi rõ họ tên)</p>
+                </div>
+                <div class="signature-box">
+                    <p><strong>Người lập hóa đơn</strong></p>
+                    <p style="font-size:11px;color:#888">(Ký và ghi rõ họ tên)</p>
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>Cảm ơn quý khách đã mua sắm tại SneakerShop!</p>
+                <p>Sản phẩm được đổi trả trong vòng 7 ngày nếu còn nguyên tem mác.</p>
+            </div>
+        </body>
+        </html>
+    `;
+    printWindow.document.write(invoiceContent);
+    printWindow.document.close();
+    printWindow.onload = function() {
+        printWindow.print();
+    };
+}
+</script>
 <?php endif; ?>
 
 <?php adminFooter(); ?>

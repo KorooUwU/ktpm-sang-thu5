@@ -38,6 +38,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
     }
+    if ($_POST['action'] === 'edit_user') {
+        $uid      = (int)$_POST['user_id'];
+        $fullname = sanitize($conn, $_POST['full_name'] ?? '');
+        $email    = sanitize($conn, $_POST['email'] ?? '');
+        $phone    = sanitize($conn, $_POST['phone'] ?? '');
+        $address  = sanitize($conn, $_POST['address'] ?? '');
+        $ward     = sanitize($conn, $_POST['ward'] ?? '');
+        $district = sanitize($conn, $_POST['district'] ?? '');
+        $city     = sanitize($conn, $_POST['city'] ?? '');
+        $role     = sanitize($conn, $_POST['role'] ?? 'customer');
+
+        if (!$fullname) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-2"></i>Họ tên không được để trống.</div>';
+        } else {
+            $conn->query("UPDATE users SET full_name='$fullname', email='$email', phone='$phone', address='$address', ward='$ward', district='$district', city='$city', role='$role' WHERE id=$uid");
+            $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã cập nhật thông tin người dùng.</div>';
+        }
+    }
     if ($_POST['action'] === 'reset_password') {
         $uid      = (int)$_POST['user_id'];
         $password = $_POST['new_password'] ?? '';
@@ -158,6 +176,13 @@ $params = array_filter(['q'=>$search,'role'=>$filter_role]);
                         </span>
                     </td>
                     <td class="text-center text-nowrap">
+                        <a href="orders.php?q=<?= urlencode($u['username']) ?>" class="btn btn-sm btn-outline-info me-1" title="Xem đơn hàng của user này">
+                            <i class="bi bi-bag-check"></i>
+                        </a>
+                        <button class="btn btn-sm btn-outline-warning me-1" title="Sửa thông tin"
+                                data-bs-toggle="modal" data-bs-target="#editModal<?= $u['id'] ?>">
+                            <i class="bi bi-pencil"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-secondary me-1" title="Đặt lại mật khẩu"
                                 data-bs-toggle="modal" data-bs-target="#pwModal<?= $u['id'] ?>">
                             <i class="bi bi-key"></i>
@@ -165,12 +190,72 @@ $params = array_filter(['q'=>$search,'role'=>$filter_role]);
                         <?php if ($u['id'] != $_SESSION['user_id']): ?>
                         <a href="users.php?toggle=<?= $u['id'] ?>&<?= http_build_query($params) ?>"
                            class="btn btn-sm btn-outline-<?= $u['status']==='active'?'warning':'success' ?>"
-                           title="<?= $u['status']==='active'?'Khóa':'Mở khóa' ?>"
-                           onclick="return confirm('Xác nhận thay đổi trạng thái?')">
+                           title="<?= $u['status']==='active'?'Khóa tài khoản':'Mở khóa tài khoản' ?>"
+                           onclick="return confirm('Xác nhận thay đổi trạng thái tài khoản?')">
                             <i class="bi bi-<?= $u['status']==='active'?'lock':'unlock' ?>"></i>
                         </a>
                         <?php endif; ?>
                     </td>
+                </tr>
+
+                <!-- Edit user modal -->
+                <div class="modal fade" id="editModal<?= $u['id'] ?>" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header py-2 bg-warning text-dark">
+                                <h6 class="modal-title fw-bold"><i class="bi bi-pencil me-2"></i>Sửa thông tin: <?= htmlspecialchars($u['username']) ?></h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <form method="POST">
+                                <div class="modal-body">
+                                    <input type="hidden" name="action" value="edit_user">
+                                    <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold">Họ và tên <span class="text-danger">*</span></label>
+                                            <input type="text" name="full_name" class="form-control form-control-sm" value="<?= htmlspecialchars($u['full_name']) ?>" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold">Vai trò</label>
+                                            <select name="role" class="form-select form-select-sm">
+                                                <option value="customer" <?= $u['role']==='customer'?'selected':'' ?>>Khách hàng</option>
+                                                <option value="admin" <?= $u['role']==='admin'?'selected':'' ?>>Admin</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold">Email</label>
+                                            <input type="email" name="email" class="form-control form-control-sm" value="<?= htmlspecialchars($u['email']) ?>">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold">Số điện thoại</label>
+                                            <input type="text" name="phone" class="form-control form-control-sm" value="<?= htmlspecialchars($u['phone']) ?>">
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label small fw-semibold">Địa chỉ đường/số nhà</label>
+                                            <input type="text" name="address" class="form-control form-control-sm" value="<?= htmlspecialchars($u['address'] ?? '') ?>">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-semibold">Phường/Xã</label>
+                                            <input type="text" name="ward" class="form-control form-control-sm" value="<?= htmlspecialchars($u['ward'] ?? '') ?>">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-semibold">Quận/Huyện</label>
+                                            <input type="text" name="district" class="form-control form-control-sm" value="<?= htmlspecialchars($u['district'] ?? '') ?>">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-semibold">Tỉnh/Thành phố</label>
+                                            <input type="text" name="city" class="form-control form-control-sm" value="<?= htmlspecialchars($u['city'] ?? '') ?>">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer py-2">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Hủy</button>
+                                    <button type="submit" class="btn btn-warning btn-sm fw-semibold">Lưu thay đổi</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
                 </tr>
 
                 <!-- Password reset modal -->

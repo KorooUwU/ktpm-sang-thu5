@@ -1,0 +1,167 @@
+<?php
+// admin/attributes.php
+require_once '_layout.php';
+adminHeader('Quản lý thuộc tính (Size & Màu)');
+
+$msg = '';
+
+// Add Size
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_size') {
+    $size_val = (int)($_POST['size'] ?? 0);
+    if ($size_val <= 0 || $size_val > 60) {
+        $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Giá trị Size không hợp lệ.</div>';
+    } else {
+        $exists = $conn->query("SELECT id FROM sizes WHERE size=$size_val")->num_rows;
+        if ($exists) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Kích thước Size <strong>' . $size_val . '</strong> đã tồn tại.</div>';
+        } else {
+            $conn->query("INSERT INTO sizes (size) VALUES ($size_val)");
+            $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã thêm Kích thước Size <strong>' . $size_val . '</strong> mới thành công.</div>';
+        }
+    }
+}
+
+// Add Color
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_color') {
+    $color_name = sanitize($conn, $_POST['color_name'] ?? '');
+    if (empty($color_name)) {
+        $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Vui lòng nhập tên màu sắc.</div>';
+    } else {
+        $exists = $conn->query("SELECT id FROM colors WHERE name='$color_name'")->num_rows;
+        if ($exists) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Màu sắc <strong>' . htmlspecialchars($color_name) . '</strong> đã tồn tại.</div>';
+        } else {
+            $conn->query("INSERT INTO colors (name) VALUES ('$color_name')");
+            $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã thêm Màu sắc <strong>' . htmlspecialchars($color_name) . '</strong> mới thành công.</div>';
+        }
+    }
+}
+
+// Delete Size
+if (isset($_GET['delete_size'])) {
+    $sid = (int)$_GET['delete_size'];
+    $used = $conn->query("SELECT COUNT(*) as c FROM product_varieties WHERE size_id=$sid")->fetch_assoc()['c'];
+    if ($used > 0) {
+        $msg = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Size này đã được sử dụng ở ' . $used . ' biến thể sản phẩm, không thể xóa.</div>';
+    } else {
+        $conn->query("DELETE FROM sizes WHERE id=$sid");
+        $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã xóa Kích thước Size.</div>';
+    }
+}
+
+// Delete Color
+if (isset($_GET['delete_color'])) {
+    $cid = (int)$_GET['delete_color'];
+    $used = $conn->query("SELECT COUNT(*) as c FROM product_varieties WHERE color_id=$cid")->fetch_assoc()['c'];
+    if ($used > 0) {
+        $msg = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Màu sắc này đã được sử dụng ở ' . $used . ' biến thể sản phẩm, không thể xóa.</div>';
+    } else {
+        $conn->query("DELETE FROM colors WHERE id=$cid");
+        $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã xóa Màu sắc.</div>';
+    }
+}
+
+// Fetch lists with usage count
+$sizes_list = $conn->query("SELECT s.*, (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.size_id=s.id) as prod_count FROM sizes s ORDER BY s.size ASC");
+$colors_list = $conn->query("SELECT c.*, (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.color_id=c.id) as prod_count FROM colors c ORDER BY c.name ASC");
+?>
+
+<?= $msg ?>
+
+<div class="row g-4">
+    <!-- Managed Sizes -->
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 fw-bold">
+                <i class="bi bi-ruler me-2 text-primary"></i>Quản lý Kích thước Giày (Size)
+            </div>
+            <div class="card-body">
+                <form method="POST" class="row g-2 mb-4">
+                    <input type="hidden" name="action" value="add_size">
+                    <div class="col-8 col-sm-9">
+                        <input type="number" name="size" class="form-control" placeholder="Nhập số Size mới (VD: 46)" min="20" max="60" required>
+                    </div>
+                    <div class="col-4 col-sm-3">
+                        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus me-1"></i>Thêm</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center" style="width:70px">ID</th>
+                                <th>Kích thước (Size)</th>
+                                <th class="text-center">Số sản phẩm dùng</th>
+                                <th class="text-center" style="width:100px">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($s = $sizes_list->fetch_assoc()): ?>
+                                <tr>
+                                    <td class="text-center text-muted small"><?= $s['id'] ?></td>
+                                    <td class="fw-bold fs-6">Size <?= $s['size'] ?></td>
+                                    <td class="text-center">
+                                        <span class="badge bg-<?= $s['prod_count'] > 0 ? 'info' : 'secondary' ?>"><?= $s['prod_count'] ?> SP</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <a href="attributes.php?delete_size=<?= $s['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Xóa Size này?')" title="Xóa Size"><i class="bi bi-trash"></i></a>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Managed Colors -->
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 fw-bold">
+                <i class="bi bi-palette me-2 text-danger"></i>Quản lý Màu sắc Sản phẩm
+            </div>
+            <div class="card-body">
+                <form method="POST" class="row g-2 mb-4">
+                    <input type="hidden" name="action" value="add_color">
+                    <div class="col-8 col-sm-9">
+                        <input type="text" name="color_name" class="form-control" placeholder="Nhập tên màu mới (VD: Tím Pastel)" required>
+                    </div>
+                    <div class="col-4 col-sm-3">
+                        <button type="submit" class="btn btn-danger w-100"><i class="bi bi-plus me-1"></i>Thêm</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center" style="width:70px">ID</th>
+                                <th>Tên màu sắc</th>
+                                <th class="text-center">Số sản phẩm dùng</th>
+                                <th class="text-center" style="width:100px">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while ($c = $colors_list->fetch_assoc()): ?>
+                                <tr>
+                                    <td class="text-center text-muted small"><?= $c['id'] ?></td>
+                                    <td class="fw-semibold"><i class="bi bi-circle-fill me-2 text-secondary" style="font-size:.8rem"></i><?= htmlspecialchars($c['name']) ?></td>
+                                    <td class="text-center">
+                                        <span class="badge bg-<?= $c['prod_count'] > 0 ? 'info' : 'secondary' ?>"><?= $c['prod_count'] ?> SP</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <a href="attributes.php?delete_color=<?= $c['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Xóa màu sắc này?')" title="Xóa Màu"><i class="bi bi-trash"></i></a>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php adminFooter(); ?>
