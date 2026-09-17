@@ -40,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
     if ($_POST['action'] === 'edit_user') {
         $uid      = (int)$_POST['user_id'];
+        $target   = $conn->query("SELECT role FROM users WHERE id=$uid")->fetch_assoc();
         $fullname = sanitize($conn, $_POST['full_name'] ?? '');
         $email    = sanitize($conn, $_POST['email'] ?? '');
         $phone    = sanitize($conn, $_POST['phone'] ?? '');
@@ -49,19 +50,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $city     = sanitize($conn, $_POST['city'] ?? '');
         $role     = sanitize($conn, $_POST['role'] ?? 'customer');
 
-        if (!$fullname) {
+        if (!$target || ($target['role'] !== 'customer' && $uid !== (int)$_SESSION['user_id'])) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-shield-lock me-2"></i>Chỉ được chỉnh sửa tài khoản khách hàng hoặc chính tài khoản admin đang đăng nhập.</div>';
+        } elseif (!$fullname) {
             $msg = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-2"></i>Họ tên không được để trống.</div>';
         } else {
-            $conn->query("UPDATE users SET full_name='$fullname', email='$email', phone='$phone', address='$address', ward='$ward', district='$district', city='$city', role='$role' WHERE id=$uid");
+            $conn->query("UPDATE users SET full_name='$fullname', email='$email', phone='$phone', address='$address', ward='$ward', district='$district', city='$city' WHERE id=$uid AND role='customer'");
             $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã cập nhật thông tin người dùng.</div>';
         }
     }
     if ($_POST['action'] === 'reset_password') {
         $uid      = (int)$_POST['user_id'];
+        $target   = $conn->query("SELECT role FROM users WHERE id=$uid")->fetch_assoc();
         $password = $_POST['new_password'] ?? '';
-        if (strlen($password) >= 6) {
+        if (!$target || ($target['role'] !== 'customer' && $uid !== (int)$_SESSION['user_id'])) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-shield-lock me-2"></i>Chỉ được đặt lại mật khẩu cho tài khoản khách hàng hoặc chính tài khoản admin đang đăng nhập.</div>';
+        } elseif (strlen($password) >= 6) {
             $hashed = password_hash($password, PASSWORD_DEFAULT);
-            $conn->query("UPDATE users SET password='$hashed' WHERE id=$uid");
+            $conn->query("UPDATE users SET password='$hashed' WHERE id=$uid AND role='customer'");
             $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã đặt lại mật khẩu.</div>';
         } else {
             $msg = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-2"></i>Mật khẩu phải ít nhất 6 ký tự.</div>';
@@ -72,12 +78,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // Toggle lock
 if (isset($_GET['toggle'])) {
     $uid = (int)$_GET['toggle'];
-    $u   = $conn->query("SELECT status, username FROM users WHERE id=$uid")->fetch_assoc();
-    if ($u['status'] === 'active') {
-        $conn->query("UPDATE users SET status='locked' WHERE id=$uid");
+    $u   = $conn->query("SELECT status, username, role FROM users WHERE id=$uid")->fetch_assoc();
+    if (!$u || $u['role'] !== 'customer') {
+        $msg = '<div class="alert alert-danger"><i class="bi bi-shield-lock me-2"></i>Chỉ được khóa hoặc mở khóa tài khoản khách hàng.</div>';
+    } elseif ($u['status'] === 'active') {
+        $conn->query("UPDATE users SET status='locked' WHERE id=$uid AND role='customer'");
         $msg = '<div class="alert alert-warning"><i class="bi bi-lock me-2"></i>Đã khóa <strong>'.htmlspecialchars($u['username']).'</strong>. User bị đăng xuất ngay lần tải trang tiếp theo.</div>';
     } else {
-        $conn->query("UPDATE users SET status='active' WHERE id=$uid");
+        $conn->query("UPDATE users SET status='active' WHERE id=$uid AND role='customer'");
         $msg = '<div class="alert alert-success"><i class="bi bi-unlock me-2"></i>Đã mở khóa <strong>'.htmlspecialchars($u['username']).'</strong>.</div>';
     }
 }
@@ -179,6 +187,7 @@ $params = array_filter(['q'=>$search,'role'=>$filter_role]);
                         <a href="orders.php?q=<?= urlencode($u['username']) ?>" class="btn btn-sm btn-outline-info me-1" title="Xem đơn hàng của user này">
                             <i class="bi bi-bag-check"></i>
                         </a>
+                                        <?php if ($u['role'] === 'customer' || (int)$u['id'] === (int)$_SESSION['user_id']): ?>
                         <button class="btn btn-sm btn-outline-warning me-1" title="Sửa thông tin"
                                 data-bs-toggle="modal" data-bs-target="#editModal<?= $u['id'] ?>">
                             <i class="bi bi-pencil"></i>
@@ -187,13 +196,14 @@ $params = array_filter(['q'=>$search,'role'=>$filter_role]);
                                 data-bs-toggle="modal" data-bs-target="#pwModal<?= $u['id'] ?>">
                             <i class="bi bi-key"></i>
                         </button>
-                        <?php if ($u['id'] != $_SESSION['user_id']): ?>
+                        <?php if ($u['role'] === 'customer' && (int)$u['id'] !== (int)$_SESSION['user_id']): ?>
                         <a href="users.php?toggle=<?= $u['id'] ?>&<?= http_build_query($params) ?>"
                            class="btn btn-sm btn-outline-<?= $u['status']==='active'?'warning':'success' ?>"
                            title="<?= $u['status']==='active'?'Khóa tài khoản':'Mở khóa tài khoản' ?>"
                            onclick="return confirm('Xác nhận thay đổi trạng thái tài khoản?')">
                             <i class="bi bi-<?= $u['status']==='active'?'lock':'unlock' ?>"></i>
                         </a>
+                        <?php endif; ?>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -219,7 +229,6 @@ $params = array_filter(['q'=>$search,'role'=>$filter_role]);
                                             <label class="form-label small fw-semibold">Vai trò</label>
                                             <select name="role" class="form-select form-select-sm">
                                                 <option value="customer" <?= $u['role']==='customer'?'selected':'' ?>>Khách hàng</option>
-                                                <option value="admin" <?= $u['role']==='admin'?'selected':'' ?>>Admin</option>
                                             </select>
                                         </div>
                                         <div class="col-md-6">
