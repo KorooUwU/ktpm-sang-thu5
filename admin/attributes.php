@@ -40,30 +40,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Delete Size
 if (isset($_GET['delete_size'])) {
     $sid = (int)$_GET['delete_size'];
-    $used = $conn->query("SELECT COUNT(*) as c FROM product_varieties WHERE size_id=$sid")->fetch_assoc()['c'];
-    if ($used > 0) {
-        $msg = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Size này đã được sử dụng ở ' . $used . ' biến thể sản phẩm, không thể xóa.</div>';
+    $pv_count = (int)$conn->query("SELECT COUNT(*) as c FROM product_varieties WHERE size_id=$sid")->fetch_assoc()['c'];
+    $od_count = (int)$conn->query("SELECT COUNT(*) as c FROM order_details WHERE size_id=$sid")->fetch_assoc()['c'];
+    $id_count = 0;
+    if (hasTableColumn($conn, 'import_details', 'size_id')) {
+        $id_count = (int)$conn->query("SELECT COUNT(*) as c FROM import_details WHERE size_id=$sid")->fetch_assoc()['c'];
+    }
+
+    $total_used = $pv_count + $od_count + $id_count;
+    if ($total_used > 0) {
+        $details = [];
+        if ($pv_count > 0) $details[] = "$pv_count biến thể sản phẩm";
+        if ($od_count > 0) $details[] = "$od_count chi tiết đơn hàng";
+        if ($id_count > 0) $details[] = "$id_count phiếu nhập hàng";
+        $detail_str = implode(', ', $details);
+        $msg = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Size này đã được sử dụng trong hệ thống (' . $detail_str . '), không thể xóa.</div>';
     } else {
-        $conn->query("DELETE FROM sizes WHERE id=$sid");
-        $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã xóa Kích thước Size.</div>';
+        try {
+            $conn->query("DELETE FROM sizes WHERE id=$sid");
+            $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã xóa Kích thước Size.</div>';
+        } catch (Throwable $e) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Không thể xóa Size do vướng ràng buộc dữ liệu: ' . htmlspecialchars($e->getMessage()) . '</div>';
+        }
     }
 }
 
 // Delete Color
 if (isset($_GET['delete_color'])) {
     $cid = (int)$_GET['delete_color'];
-    $used = $conn->query("SELECT COUNT(*) as c FROM product_varieties WHERE color_id=$cid")->fetch_assoc()['c'];
-    if ($used > 0) {
-        $msg = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Màu sắc này đã được sử dụng ở ' . $used . ' biến thể sản phẩm, không thể xóa.</div>';
+    $pv_count = (int)$conn->query("SELECT COUNT(*) as c FROM product_varieties WHERE color_id=$cid")->fetch_assoc()['c'];
+    $od_count = (int)$conn->query("SELECT COUNT(*) as c FROM order_details WHERE color_id=$cid")->fetch_assoc()['c'];
+    $id_count = 0;
+    if (hasTableColumn($conn, 'import_details', 'color_id')) {
+        $id_count = (int)$conn->query("SELECT COUNT(*) as c FROM import_details WHERE color_id=$cid")->fetch_assoc()['c'];
+    }
+
+    $total_used = $pv_count + $od_count + $id_count;
+    if ($total_used > 0) {
+        $details = [];
+        if ($pv_count > 0) $details[] = "$pv_count biến thể sản phẩm";
+        if ($od_count > 0) $details[] = "$od_count chi tiết đơn hàng";
+        if ($id_count > 0) $details[] = "$id_count phiếu nhập hàng";
+        $detail_str = implode(', ', $details);
+        $msg = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Màu sắc này đã được sử dụng trong hệ thống (' . $detail_str . '), không thể xóa.</div>';
     } else {
-        $conn->query("DELETE FROM colors WHERE id=$cid");
-        $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã xóa Màu sắc.</div>';
+        try {
+            $conn->query("DELETE FROM colors WHERE id=$cid");
+            $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã xóa Màu sắc.</div>';
+        } catch (Throwable $e) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Không thể xóa màu sắc do vướng ràng buộc dữ liệu: ' . htmlspecialchars($e->getMessage()) . '</div>';
+        }
     }
 }
 
 // Fetch lists with usage count
 $sizes_list = $conn->query("SELECT s.*, (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.size_id=s.id) as prod_count FROM sizes s ORDER BY s.size ASC");
 $colors_list = $conn->query("SELECT c.*, (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.color_id=c.id) as prod_count FROM colors c ORDER BY c.name ASC");
+
 ?>
 
 <?= $msg ?>
