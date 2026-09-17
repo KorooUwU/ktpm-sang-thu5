@@ -5,13 +5,25 @@ adminHeader('Quản lý thuộc tính (Size & Màu)');
 
 $msg = '';
 
+// Helper for safe query execution returning single count
+function getSafeCount($conn, $sql) {
+    try {
+        $res = $conn->query($sql);
+        if ($res && $row = $res->fetch_assoc()) {
+            return (int)($row['c'] ?? 0);
+        }
+    } catch (Throwable $e) {}
+    return 0;
+}
+
 // Add Size
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_size') {
     $size_val = (int)($_POST['size'] ?? 0);
     if ($size_val <= 0 || $size_val > 60) {
         $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Giá trị Size không hợp lệ.</div>';
     } else {
-        $exists = $conn->query("SELECT id FROM sizes WHERE size=$size_val")->num_rows;
+        $check = $conn->query("SELECT id FROM sizes WHERE size=$size_val");
+        $exists = ($check && $check->num_rows > 0);
         if ($exists) {
             $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Kích thước Size <strong>' . $size_val . '</strong> đã tồn tại.</div>';
         } else {
@@ -27,7 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($color_name)) {
         $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Vui lòng nhập tên màu sắc.</div>';
     } else {
-        $exists = $conn->query("SELECT id FROM colors WHERE name='$color_name'")->num_rows;
+        $check = $conn->query("SELECT id FROM colors WHERE name='$color_name'");
+        $exists = ($check && $check->num_rows > 0);
         if ($exists) {
             $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Màu sắc <strong>' . htmlspecialchars($color_name) . '</strong> đã tồn tại.</div>';
         } else {
@@ -40,11 +53,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Delete Size
 if (isset($_GET['delete_size'])) {
     $sid = (int)$_GET['delete_size'];
-    $pv_count = (int)$conn->query("SELECT COUNT(*) as c FROM product_varieties WHERE size_id=$sid")->fetch_assoc()['c'];
-    $od_count = (int)$conn->query("SELECT COUNT(*) as c FROM order_details WHERE size_id=$sid")->fetch_assoc()['c'];
+    $pv_count = getSafeCount($conn, "SELECT COUNT(*) as c FROM product_varieties WHERE size_id=$sid");
+    $od_count = getSafeCount($conn, "SELECT COUNT(*) as c FROM order_details WHERE size_id=$sid");
     $id_count = 0;
     if (hasTableColumn($conn, 'import_details', 'size_id')) {
-        $id_count = (int)$conn->query("SELECT COUNT(*) as c FROM import_details WHERE size_id=$sid")->fetch_assoc()['c'];
+        $id_count = getSafeCount($conn, "SELECT COUNT(*) as c FROM import_details WHERE size_id=$sid");
     }
 
     $total_used = $pv_count + $od_count + $id_count;
@@ -68,11 +81,11 @@ if (isset($_GET['delete_size'])) {
 // Delete Color
 if (isset($_GET['delete_color'])) {
     $cid = (int)$_GET['delete_color'];
-    $pv_count = (int)$conn->query("SELECT COUNT(*) as c FROM product_varieties WHERE color_id=$cid")->fetch_assoc()['c'];
-    $od_count = (int)$conn->query("SELECT COUNT(*) as c FROM order_details WHERE color_id=$cid")->fetch_assoc()['c'];
+    $pv_count = getSafeCount($conn, "SELECT COUNT(*) as c FROM product_varieties WHERE color_id=$cid");
+    $od_count = getSafeCount($conn, "SELECT COUNT(*) as c FROM order_details WHERE color_id=$cid");
     $id_count = 0;
     if (hasTableColumn($conn, 'import_details', 'color_id')) {
-        $id_count = (int)$conn->query("SELECT COUNT(*) as c FROM import_details WHERE color_id=$cid")->fetch_assoc()['c'];
+        $id_count = getSafeCount($conn, "SELECT COUNT(*) as c FROM import_details WHERE color_id=$cid");
     }
 
     $total_used = $pv_count + $od_count + $id_count;
@@ -93,17 +106,24 @@ if (isset($_GET['delete_color'])) {
     }
 }
 
+// Dynamically check columns before building list queries
+$has_import_size = hasTableColumn($conn, 'import_details', 'size_id');
+$has_import_color = hasTableColumn($conn, 'import_details', 'color_id');
+
+$import_size_sql = $has_import_size ? "(SELECT COUNT(*) FROM import_details id_tab WHERE id_tab.size_id=s.id)" : "0";
+$import_color_sql = $has_import_color ? "(SELECT COUNT(*) FROM import_details id_tab WHERE id_tab.color_id=c.id)" : "0";
+
 // Fetch lists with usage count across product varieties, orders, and imports
 $sizes_list = $conn->query("SELECT s.*, 
     (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.size_id=s.id) as prod_count,
     (SELECT COUNT(*) FROM order_details od WHERE od.size_id=s.id) as order_count,
-    (SELECT COUNT(*) FROM import_details id_tab WHERE id_tab.size_id=s.id) as import_count
+    $import_size_sql as import_count
 FROM sizes s ORDER BY s.size ASC");
 
 $colors_list = $conn->query("SELECT c.*, 
     (SELECT COUNT(DISTINCT product_id) FROM product_varieties pv WHERE pv.color_id=c.id) as prod_count,
     (SELECT COUNT(*) FROM order_details od WHERE od.color_id=c.id) as order_count,
-    (SELECT COUNT(*) FROM import_details id_tab WHERE id_tab.color_id=c.id) as import_count
+    $import_color_sql as import_count
 FROM colors c ORDER BY c.name ASC");
 
 ?>
@@ -139,24 +159,28 @@ FROM colors c ORDER BY c.name ASC");
                             </tr>
                         </thead>
                         <tbody>
-                            <?php while ($s = $sizes_list->fetch_assoc()): ?>
-                                <tr>
-                                    <td class="text-center text-muted small"><?= $s['id'] ?></td>
-                                    <td class="fw-bold fs-6">Size <?= $s['size'] ?></td>
-                                    <td class="text-center">
-                                        <span class="badge bg-<?= $s['prod_count'] > 0 ? 'info' : 'secondary' ?>" title="Số sản phẩm đang sử dụng biến thể size này"><?= $s['prod_count'] ?> SP</span>
-                                        <?php if ($s['order_count'] > 0): ?>
-                                            <span class="badge bg-warning text-dark ms-1" title="Size đã xuất hiện trong <?= $s['order_count'] ?> chi tiết đơn hàng"><i class="bi bi-receipt me-1"></i><?= $s['order_count'] ?> đơn</span>
-                                        <?php endif; ?>
-                                        <?php if ($s['import_count'] > 0): ?>
-                                            <span class="badge bg-secondary ms-1" title="Size đã xuất hiện trong <?= $s['import_count'] ?> phiếu nhập"><i class="bi bi-box-arrow-in-right me-1"></i><?= $s['import_count'] ?> nhập</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="text-center">
-                                        <a href="attributes.php?delete_size=<?= $s['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Xóa Size này?')" title="Xóa Size"><i class="bi bi-trash"></i></a>
-                                    </td>
-                                </tr>
-                            <?php endwhile; ?>
+                            <?php if ($sizes_list && $sizes_list->num_rows > 0): ?>
+                                <?php while ($s = $sizes_list->fetch_assoc()): ?>
+                                    <tr>
+                                        <td class="text-center text-muted small"><?= $s['id'] ?></td>
+                                        <td class="fw-bold fs-6">Size <?= $s['size'] ?></td>
+                                        <td class="text-center">
+                                            <span class="badge bg-<?= $s['prod_count'] > 0 ? 'info' : 'secondary' ?>" title="Số sản phẩm đang sử dụng biến thể size này"><?= $s['prod_count'] ?> SP</span>
+                                            <?php if (!empty($s['order_count']) && $s['order_count'] > 0): ?>
+                                                <span class="badge bg-warning text-dark ms-1" title="Size đã xuất hiện trong <?= $s['order_count'] ?> chi tiết đơn hàng"><i class="bi bi-receipt me-1"></i><?= $s['order_count'] ?> đơn</span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($s['import_count']) && $s['import_count'] > 0): ?>
+                                                <span class="badge bg-secondary ms-1" title="Size đã xuất hiện trong <?= $s['import_count'] ?> phiếu nhập"><i class="bi bi-box-arrow-in-right me-1"></i><?= $s['import_count'] ?> nhập</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-center">
+                                            <a href="attributes.php?delete_size=<?= $s['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Xóa Size này?')" title="Xóa Size"><i class="bi bi-trash"></i></a>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr><td colspan="4" class="text-center text-muted py-3">Chưa có Kích thước Size nào.</td></tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -192,24 +216,28 @@ FROM colors c ORDER BY c.name ASC");
                             </tr>
                         </thead>
                         <tbody>
-                            <?php while ($c = $colors_list->fetch_assoc()): ?>
-                                <tr>
-                                    <td class="text-center text-muted small"><?= $c['id'] ?></td>
-                                    <td class="fw-semibold"><i class="bi bi-circle-fill me-2 text-secondary" style="font-size:.8rem"></i><?= htmlspecialchars($c['name']) ?></td>
-                                    <td class="text-center">
-                                        <span class="badge bg-<?= $c['prod_count'] > 0 ? 'info' : 'secondary' ?>" title="Số sản phẩm đang sử dụng biến thể màu này"><?= $c['prod_count'] ?> SP</span>
-                                        <?php if ($c['order_count'] > 0): ?>
-                                            <span class="badge bg-warning text-dark ms-1" title="Màu sắc đã xuất hiện trong <?= $c['order_count'] ?> chi tiết đơn hàng"><i class="bi bi-receipt me-1"></i><?= $c['order_count'] ?> đơn</span>
-                                        <?php endif; ?>
-                                        <?php if ($c['import_count'] > 0): ?>
-                                            <span class="badge bg-secondary ms-1" title="Màu sắc đã xuất hiện trong <?= $c['import_count'] ?> phiếu nhập"><i class="bi bi-box-arrow-in-right me-1"></i><?= $c['import_count'] ?> nhập</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="text-center">
-                                        <a href="attributes.php?delete_color=<?= $c['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Xóa màu sắc này?')" title="Xóa Màu"><i class="bi bi-trash"></i></a>
-                                    </td>
-                                </tr>
-                            <?php endwhile; ?>
+                            <?php if ($colors_list && $colors_list->num_rows > 0): ?>
+                                <?php while ($c = $colors_list->fetch_assoc()): ?>
+                                    <tr>
+                                        <td class="text-center text-muted small"><?= $c['id'] ?></td>
+                                        <td class="fw-semibold"><i class="bi bi-circle-fill me-2 text-secondary" style="font-size:.8rem"></i><?= htmlspecialchars($c['name']) ?></td>
+                                        <td class="text-center">
+                                            <span class="badge bg-<?= $c['prod_count'] > 0 ? 'info' : 'secondary' ?>" title="Số sản phẩm đang sử dụng biến thể màu này"><?= $c['prod_count'] ?> SP</span>
+                                            <?php if (!empty($c['order_count']) && $c['order_count'] > 0): ?>
+                                                <span class="badge bg-warning text-dark ms-1" title="Màu sắc đã xuất hiện trong <?= $c['order_count'] ?> chi tiết đơn hàng"><i class="bi bi-receipt me-1"></i><?= $c['order_count'] ?> đơn</span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($c['import_count']) && $c['import_count'] > 0): ?>
+                                                <span class="badge bg-secondary ms-1" title="Màu sắc đã xuất hiện trong <?= $c['import_count'] ?> phiếu nhập"><i class="bi bi-box-arrow-in-right me-1"></i><?= $c['import_count'] ?> nhập</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-center">
+                                            <a href="attributes.php?delete_color=<?= $c['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Xóa màu sắc này?')" title="Xóa Màu"><i class="bi bi-trash"></i></a>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr><td colspan="4" class="text-center text-muted py-3">Chưa có Màu sắc nào.</td></tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
