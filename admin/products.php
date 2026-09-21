@@ -110,6 +110,11 @@ if (isset($_GET['edit'])) {
 }
 
 $categories = $conn->query("SELECT * FROM categories ORDER BY name");
+$existing_product_names = [];
+$product_name_result = $conn->query("SELECT name FROM products");
+while ($product_name_row = $product_name_result->fetch_assoc()) {
+    $existing_product_names[] = $product_name_row['name'];
+}
 
 // List with filters + pagination + search
 $filter_cat = isset($_GET['cat']) ? (int) $_GET['cat'] : 0;
@@ -282,7 +287,7 @@ $params_p = array_filter(['q' => $search_p, 'cat' => $filter_cat, 'status' => $f
         <div class="card border-0 shadow-sm">
             <div class="card-header fw-bold bg-white border-0"><i class="bi bi-plus me-2"></i>Thêm sản phẩm</div>
             <div class="card-body">
-                <form method="POST" enctype="multipart/form-data">
+                <form method="POST" enctype="multipart/form-data" onsubmit="return confirmDuplicateProductName(this)">
                     <input type="hidden" name="action" value="add">
 
                     <h6 class="text-muted fw-bold mb-3 small">THÔNG TIN CƠ BẢN</h6>
@@ -345,10 +350,6 @@ $params_p = array_filter(['q' => $search_p, 'cat' => $filter_cat, 'status' => $f
                             <input type="text" name="unit" class="form-control" value="đôi">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">Giá vốn (₫)</label>
-                            <input type="number" name="import_price" class="form-control" value="0" step="1000" min="0" placeholder="0">
-                        </div>
-                        <div class="col-md-2">
                             <label class="form-label">% Lợi nhuận</label>
                             <div class="input-group">
                                 <input type="number" name="profit_rate" class="form-control" value="30" step="0.01" min="0">
@@ -365,6 +366,21 @@ $params_p = array_filter(['q' => $search_p, 'cat' => $filter_cat, 'status' => $f
         </div>
     </div>
 <?php endif; ?>
+
+<script>
+    const existingProductNames = <?= json_encode($existing_product_names, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    function confirmDuplicateProductName(form) {
+        const productName = form.elements.name.value.trim().toLocaleLowerCase();
+        const isDuplicate = existingProductNames.some(name => name.trim().toLocaleLowerCase() === productName);
+
+        if (!isDuplicate) {
+            return true;
+        }
+
+        return window.confirm('Tên sản phẩm này đã tồn tại. Bạn vẫn muốn thêm sản phẩm?');
+    }
+</script>
 
 <!-- Filters + List -->
 <div class="card border-0 shadow-sm">
