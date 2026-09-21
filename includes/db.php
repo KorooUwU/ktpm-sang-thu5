@@ -2,7 +2,7 @@
 // includes/db.php
 define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_USER', getenv('DB_USER') ?: 'root');
-define('DB_PASS', getenv('DB_PASS') ?: 'Quocan@529529');
+define('DB_PASS', getenv('DB_PASS') ?: '');
 define('DB_NAME', getenv('DB_NAME') ?: 'sneaker_shop');
 
 date_default_timezone_set('Asia/Ho_Chi_Minh');
