@@ -69,6 +69,7 @@ $date_from     = isset($_GET['date_from']) ? sanitize($conn, $_GET['date_from'])
 $date_to       = isset($_GET['date_to'])   ? sanitize($conn, $_GET['date_to']) : '';
 $sort_ward     = isset($_GET['sort_ward']) ? 1 : 0;
 $search_o      = isset($_GET['q'])         ? sanitize($conn, $_GET['q']) : '';
+$user_id_o     = isset($_GET['user_id'])  ? (int)$_GET['user_id'] : 0;
 $page_o        = max(1, (int)($_GET['page'] ?? 1));
 $per_page_o    = 15;
 
@@ -76,13 +77,14 @@ $where = "1=1";
 if ($filter_status) $where .= " AND o.status='$filter_status'";
 if ($date_from)     $where .= " AND DATE(o.created_at) >= '$date_from'";
 if ($date_to)       $where .= " AND DATE(o.created_at) <= '$date_to'";
-if ($search_o)      $where .= " AND (o.order_code LIKE '%$search_o%' OR u.full_name LIKE '%$search_o%' OR o.receiver_phone LIKE '%$search_o%')";
+if ($user_id_o)     $where .= " AND o.user_id=$user_id_o";
+if ($search_o)      $where .= " AND (o.order_code LIKE '%$search_o%' OR u.username LIKE '%$search_o%' OR u.full_name LIKE '%$search_o%' OR o.receiver_phone LIKE '%$search_o%')";
 
 $order_by  = $sort_ward ? "o.ward, o.district" : "o.created_at DESC";
 $total_o   = $conn->query("SELECT COUNT(*) as c FROM orders o JOIN users u ON o.user_id=u.id WHERE $where")->fetch_assoc()['c'];
 $offset_o  = ($page_o - 1) * $per_page_o;
 $orders    = $conn->query("SELECT o.*, u.full_name FROM orders o JOIN users u ON o.user_id=u.id WHERE $where ORDER BY $order_by LIMIT $per_page_o OFFSET $offset_o");
-$params_o  = array_filter(['q' => $search_o, 'status' => $filter_status, 'date_from' => $date_from, 'date_to' => $date_to, 'sort_ward' => $sort_ward ? 1 : null]);
+$params_o  = array_filter(['q' => $search_o, 'user_id' => $user_id_o, 'status' => $filter_status, 'date_from' => $date_from, 'date_to' => $date_to, 'sort_ward' => $sort_ward ? 1 : null]);
 
 // Detail view
 $detail_id   = isset($_GET['id']) ? (int)$_GET['id'] : 0;

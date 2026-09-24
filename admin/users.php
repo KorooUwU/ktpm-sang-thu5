@@ -48,14 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $ward     = sanitize($conn, $_POST['ward'] ?? '');
         $district = sanitize($conn, $_POST['district'] ?? '');
         $city     = sanitize($conn, $_POST['city'] ?? '');
-        $role     = sanitize($conn, $_POST['role'] ?? 'customer');
 
-        if (!$target || ($target['role'] !== 'customer' && $uid !== (int)$_SESSION['user_id'])) {
-            $msg = '<div class="alert alert-danger"><i class="bi bi-shield-lock me-2"></i>Chỉ được chỉnh sửa tài khoản khách hàng hoặc chính tài khoản admin đang đăng nhập.</div>';
+        if (!$target) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-shield-lock me-2"></i>Tài khoản không tồn tại.</div>';
         } elseif (!$fullname) {
             $msg = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-2"></i>Họ tên không được để trống.</div>';
         } else {
-            $conn->query("UPDATE users SET full_name='$fullname', email='$email', phone='$phone', address='$address', ward='$ward', district='$district', city='$city' WHERE id=$uid AND role='customer'");
+            $conn->query("UPDATE users SET full_name='$fullname', email='$email', phone='$phone', address='$address', ward='$ward', district='$district', city='$city' WHERE id=$uid");
             $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã cập nhật thông tin người dùng.</div>';
         }
     }
@@ -63,11 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $uid      = (int)$_POST['user_id'];
         $target   = $conn->query("SELECT role FROM users WHERE id=$uid")->fetch_assoc();
         $password = $_POST['new_password'] ?? '';
-        if (!$target || ($target['role'] !== 'customer' && $uid !== (int)$_SESSION['user_id'])) {
-            $msg = '<div class="alert alert-danger"><i class="bi bi-shield-lock me-2"></i>Chỉ được đặt lại mật khẩu cho tài khoản khách hàng hoặc chính tài khoản admin đang đăng nhập.</div>';
+        if (!$target) {
+            $msg = '<div class="alert alert-danger"><i class="bi bi-shield-lock me-2"></i>Tài khoản không tồn tại.</div>';
         } elseif (strlen($password) >= 6) {
             $hashed = password_hash($password, PASSWORD_DEFAULT);
-            $conn->query("UPDATE users SET password='$hashed' WHERE id=$uid AND role='customer'");
+            $conn->query("UPDATE users SET password='$hashed' WHERE id=$uid");
             $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã đặt lại mật khẩu.</div>';
         } else {
             $msg = '<div class="alert alert-danger"><i class="bi bi-exclamation-circle me-2"></i>Mật khẩu phải ít nhất 6 ký tự.</div>';
@@ -184,10 +183,9 @@ $params = array_filter(['q'=>$search,'role'=>$filter_role]);
                         </span>
                     </td>
                     <td class="text-center text-nowrap">
-                        <a href="orders.php?q=<?= urlencode($u['username']) ?>" class="btn btn-sm btn-outline-info me-1" title="Xem đơn hàng của user này">
+                        <a href="orders.php?user_id=<?= (int)$u['id'] ?>" class="btn btn-sm btn-outline-info me-1" title="Xem đơn hàng của user này">
                             <i class="bi bi-bag-check"></i>
                         </a>
-                                        <?php if ($u['role'] === 'customer' || (int)$u['id'] === (int)$_SESSION['user_id']): ?>
                         <button class="btn btn-sm btn-outline-warning me-1" title="Sửa thông tin"
                                 data-bs-toggle="modal" data-bs-target="#editModal<?= $u['id'] ?>">
                             <i class="bi bi-pencil"></i>
@@ -203,7 +201,6 @@ $params = array_filter(['q'=>$search,'role'=>$filter_role]);
                            onclick="return confirm('Xác nhận thay đổi trạng thái tài khoản?')">
                             <i class="bi bi-<?= $u['status']==='active'?'lock':'unlock' ?>"></i>
                         </a>
-                        <?php endif; ?>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -224,12 +221,6 @@ $params = array_filter(['q'=>$search,'role'=>$filter_role]);
                                         <div class="col-md-6">
                                             <label class="form-label small fw-semibold">Họ và tên <span class="text-danger">*</span></label>
                                             <input type="text" name="full_name" class="form-control form-control-sm" value="<?= htmlspecialchars($u['full_name']) ?>" required>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label class="form-label small fw-semibold">Vai trò</label>
-                                            <select name="role" class="form-select form-select-sm">
-                                                <option value="customer" <?= $u['role']==='customer'?'selected':'' ?>>Khách hàng</option>
-                                            </select>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label small fw-semibold">Email</label>
