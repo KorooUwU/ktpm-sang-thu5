@@ -53,6 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     if (!$code || $value <= 0) {
         $msg = '<div class="alert alert-danger">Vui lòng nhập mã code và giá trị giảm hợp lệ.</div>';
+    } elseif ($type === 'percentage' && $value > 100) {
+        $msg = '<div class="alert alert-danger">Phần trăm giảm phải lớn hơn 0 và không được vượt quá 100%.</div>';
     } elseif ($max_discount !== 'NULL' && (float)$_POST['max_discount_amount'] < 0) {
         $msg = '<div class="alert alert-danger">Số tiền giảm tối đa không được nhỏ hơn 0.</div>';
     } elseif ($max_uses !== 'NULL' && $max_uses < 1) {
@@ -145,7 +147,7 @@ $all_products = $conn->query("SELECT id, name, code FROM products WHERE status='
                         </div>
                         <div class="col-6">
                             <label class="form-label fw-semibold small">Giá trị giảm <span class="text-danger">*</span></label>
-                            <input type="number" name="discount_value" class="form-control" required min="1">
+                            <input type="number" name="discount_value" id="discountValue" class="form-control" required min="1" step="any">
                         </div>
                     </div>
 
@@ -294,6 +296,8 @@ function toggleScope(val) {
 }
 function toggleMaxDiscount(val) {
     document.getElementById('maxDiscountArea').style.display = (val === 'percentage' ? 'block' : 'none');
+    const discountValue = document.getElementById('discountValue');
+    discountValue.max = val === 'percentage' ? '100' : '';
 }
 </script>
 
