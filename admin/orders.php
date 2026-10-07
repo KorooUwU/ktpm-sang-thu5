@@ -38,21 +38,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 
         if ($ruleError) {
             $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>' . $ruleError . '</div>';
+        } elseif ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
+            $cancelResult = cancelOrderAndRestoreStock($conn, $id);
+            if ($cancelResult['success']) {
+                $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>' . htmlspecialchars($cancelResult['message']) . '</div>';
+            } else {
+                $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>' . htmlspecialchars($cancelResult['message']) . '</div>';
+            }
         } else {
             // Thực hiện cập nhật
-            $conn->query("UPDATE orders SET status='$newStatus' WHERE id=$id");
-
-            // YC: hoàn tồn kho khi huỷ đơn (chưa huỷ trước đó)
-            if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
-                $details = $conn->query("SELECT product_id, color_id, size_id, quantity FROM order_details WHERE order_id=$id");
-                while ($d = $details->fetch_assoc()) {
-                    $pid = (int)$d['product_id'];
-                    $qty = (int)$d['quantity'];
-                    $cid = (int)$d['color_id'];
-                    $sid = (int)$d['size_id'];
-                    $conn->query("UPDATE product_varieties SET stock_quantity = stock_quantity + $qty WHERE product_id=$pid AND color_id=$cid AND size_id=$sid");
-                }
-                $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã huỷ đơn hàng và hoàn lại tồn kho.</div>';
+            if (!$conn->query("UPDATE orders SET status='$newStatus' WHERE id=$id")) {
+                $msg = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Không thể cập nhật trạng thái đơn hàng.</div>';
             } else {
                 $msg = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Đã cập nhật trạng thái đơn hàng.</div>';
             }
