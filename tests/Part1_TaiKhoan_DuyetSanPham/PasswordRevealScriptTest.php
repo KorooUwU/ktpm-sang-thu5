@@ -48,6 +48,6 @@ final class PasswordRevealScriptTest extends TestCase
     {
         // Gợi ý: Đây là mã JavaScript; kiểm tra chuỗi "text"/"password" trong script hoặc dùng trình
         // duyệt tự động ở mức hệ thống.
-        $this->markTestIncomplete('TODO: Nhấn nút đổi type giữa password và text');
+        ob_start(); include PROJECT_ROOT . '/includes/password-reveal.php'; $html=(string) ob_get_clean(); $this->assertStringContainsString("input.type = 'text'",$html); $this->assertStringContainsString("input.type = 'password'",$html);
     }
 }
